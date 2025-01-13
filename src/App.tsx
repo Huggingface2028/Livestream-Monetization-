@@ -6,6 +6,7 @@ import Campaigns from './pages/Campaigns';
 import Token from './pages/Token';
 import Rewards from './pages/Rewards';
 import { WalletProvider } from './components/WalletProvider';
+import Migration from './pages/Migration';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
               <Route path="/campaigns" element={<Campaigns />} />
               <Route path="/token" element={<Token />} />
               <Route path="/rewards" element={<Rewards />} />
+              <Route path="/migration" element={<Migration />} />
             </Routes>
           </main>
           <Navigation />
