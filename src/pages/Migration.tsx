@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Download, Upload, Users, Video, Heart, Bookmark, CheckCircle, AlertCircle } from 'lucide-react';
-import { initiateAuth, getAccessToken, getFollowers } from '../utils/tiktokAuth';
+import { initiateAuth, getAccessToken, getFollowers } from '../../services/tiktokAuth';
 import axios from 'axios';
 
 interface MigrationStatus {
