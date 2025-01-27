@@ -4,8 +4,16 @@ import * as crypto from 'crypto'
 
 const CLIENT_KEY = import.meta.env.VITE_TIKTOK_CLIENT_KEY;
 const CLIENT_SECRET = import.meta.env.VITE_TIKTOK_CLIENT_SECRET;
-const REDIRECT_URI = import.meta.env.VITE_TIKTOK_REDIRECT_URI;
+const REDIRECT_URI = import.meta.env.VITE_TIKTOK_REDIRECT_URL;
 
+/**
+ * Generates a random state string using the Web Crypto API.
+ */
+const generateRandomState = () => {
+  const array = new Uint8Array(16);
+  window.crypto.getRandomValues(array);
+  return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
 
 /**
  * Initiates TikTok OAuth Authorization
@@ -13,7 +21,7 @@ const REDIRECT_URI = import.meta.env.VITE_TIKTOK_REDIRECT_URI;
 export const initiateAuth = async () => {
 //
   const { code_verifier, code_challenge } = await pkceChallenge();
-  const state = crypto.randomBytes(32).toString('hex');
+  const state = generateRandomState();
  
   // Secure storage using sessionStorage
   sessionStorage.setItem('pkce_verifier', code_verifier);
