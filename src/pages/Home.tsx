@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Twitch, Youtube, AudioLines } from 'lucide-react';
 import { FaTiktok } from "react-icons/fa";
+import { initiateAuth } from '../services/auth';
 
 const Home = () => {
   const [creators, setCreators] = useState([]);
 
   // Function to initiate TikTok login
   const handleConnectTikTok = () => {
-    window.location.href = 'http://localhost:4000/auth/tiktok';
+    /* window.location.href = 'http://localhost:4000/auth/tiktok'; */
+    initiateAuth();
   };
 
   // Fetch creators dynamically (e.g., from an API)

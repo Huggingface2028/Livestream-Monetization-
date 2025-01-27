@@ -24,4 +24,19 @@ export const sessionStoreOpsDuration = new Histogram({
   registers: [registry]
 });
 
+export const lockAcquisitionDuration = new Histogram({
+  name: 'redis_lock_acquisition_duration_seconds',
+  help: 'Time taken to acquire Redis locks',
+  labelNames: ['operation'],
+  buckets: [0.1, 0.5, 1, 2, 5],
+  registers: [registry]
+});
+
+export const sqsRetryCounter = new Counter({
+  name: 'sqs_operation_retries_total',
+  help: 'Total number of SQS operation retries',
+  labelNames: ['queue'],
+  registers: [registry]
+});
+
 export const getMetrics = () => registry.metrics();
