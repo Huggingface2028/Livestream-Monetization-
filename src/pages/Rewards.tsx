@@ -1,4 +1,4 @@
-import React from 'react';
+// import React from 'react';
 import { Gift, Award, Coins } from 'lucide-react';
 
 const Rewards = () => {

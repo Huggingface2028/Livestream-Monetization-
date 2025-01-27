@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Download, Upload, Users, Video, Heart, Bookmark, CheckCircle, AlertCircle } from 'lucide-react';
-import { initiateAuth, getAccessToken, getFollowers } from '../../services/tiktokAuth';
+import { Download, Users, Video, Heart, Bookmark, CheckCircle, AlertCircle } from 'lucide-react';
+import { initiateAuth, getAccessToken, getUserInfo } from '../services/auth';
 import axios from 'axios';
 
 interface MigrationStatus {
@@ -33,7 +33,7 @@ const Migration = () => {
       if (code && state === localStorage.getItem('tiktok_auth_state')) {
         try {
           const accessToken = await getAccessToken(code);
-          localStorage.setItem('tiktok_access_token', accessToken);
+          localStorage.setItem('tiktok_access_token', accessToken.access_token);
           setIsConnected(true);
           setError('');
         } catch (err) {
@@ -70,7 +70,7 @@ const Migration = () => {
         throw new Error('No access token found');
       }
 
-      const followers = await getFollowers(accessToken);
+      const followers = await getUserInfo(accessToken);
       
       // Send followers to backend
       await axios.post('/invite-followers', { accessToken });
@@ -78,7 +78,7 @@ const Migration = () => {
       // Update migration status
       setMigrationStatus(prev => ({
         ...prev,
-        followers: followers.length
+        followers: (followers as { followers: number }).followers
       }));
 
       // Simulate other migrations

@@ -1,0 +1,11 @@
+groups:
+- name: pkce_alerts
+  rules:
+  - alert: PkceVerificationFailureRate
+    expr: rate(pkce_verification_attempts{result="failure"}[5m]) > 0.1
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High PKCE verification failure rate"
+      description: "PKCE failure rate exceeded 10% over 5 minutes"
