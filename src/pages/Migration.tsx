@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
-import { Download, Upload, Users, Video, Heart, Bookmark, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Download, Users, Video, Heart, Bookmark, CheckCircle, AlertCircle } from 'lucide-react';
+import { initiateAuth, getAccessToken, getUserInfo } from '../services/auth';
+import axios from 'axios';
 
 interface MigrationStatus {
   videos: number;
@@ -19,17 +22,37 @@ const Migration = () => {
   });
   const [isMigrating, setIsMigrating] = useState(false);
   const [error, setError] = useState('');
+  const location = useLocation();
 
-  const platforms = [
-    { id: 'youtube', name: 'YouTube Shorts' },
-    { id: 'instagram', name: 'Instagram Reels' },
-    { id: 'snapchat', name: 'Snapchat Spotlight' }
-  ];
+  useEffect(() => {
+    const handleAuthCallback = async () => {
+      const params = new URLSearchParams(location.search);
+      const code = params.get('code');
+      const state = params.get('state');
+      
+      if (code && state === localStorage.getItem('tiktok_auth_state')) {
+        try {
+          const accessToken = await getAccessToken(code);
+          localStorage.setItem('tiktok_access_token', accessToken.access_token);
+          setIsConnected(true);
+          setError('');
+        } catch (err) {
+          setError('Failed to authenticate with TikTok');
+          console.error(err);
+        }
+      }
+    };
+
+    handleAuthCallback();
+  }, [location]);
 
   const handleTikTokConnect = () => {
-    // Implement TikTok OAuth here
-    setIsConnected(true);
-    setError('');
+    try {
+      initiateAuth();
+    } catch (err) {
+      setError('Failed to connect to TikTok');
+      console.error(err);
+    }
   };
 
   const handleMigration = async () => {
@@ -42,22 +65,45 @@ const Migration = () => {
     setError('');
 
     try {
-      // Simulate migration process
+      const accessToken = localStorage.getItem('tiktok_access_token');
+      if (!accessToken) {
+        throw new Error('No access token found');
+      }
+
+      const followers = await getUserInfo(accessToken);
+      
+      // Send followers to backend
+      await axios.post('/invite-followers', { accessToken });
+
+      // Update migration status
+      setMigrationStatus(prev => ({
+        ...prev,
+        followers: (followers as { followers: number }).followers
+      }));
+
+      // Simulate other migrations
       for (let i = 0; i <= 100; i += 20) {
         await new Promise(resolve => setTimeout(resolve, 1000));
-        setMigrationStatus({
+        setMigrationStatus(prev => ({
           videos: Math.floor(i * 0.3),
           saved: Math.floor(i * 0.2),
           liked: Math.floor(i * 0.3),
-          followers: Math.floor(i * 0.2)
-        });
+          followers: prev.followers
+        }));
       }
     } catch (err) {
       setError('Migration failed. Please try again.');
+      console.error(err);
     } finally {
       setIsMigrating(false);
     }
   };
+
+  const platforms = [
+    { id: 'youtube', name: 'YouTube Shorts' },
+    { id: 'instagram', name: 'Instagram Reels' },
+    { id: 'snapchat', name: 'Snapchat Spotlight' }
+  ];
 
   return (
     <div className="max-w-4xl mx-auto p-6">

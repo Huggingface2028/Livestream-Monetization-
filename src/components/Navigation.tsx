@@ -1,6 +1,12 @@
-import React from 'react';
+// import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, PlaySquare, Coins, Gift } from 'lucide-react';
+import { Home, PlaySquare, Coins, Gift, Database } from 'lucide-react';
+
+// interface NavItem {
+//   path: string;
+//   icon: React.ComponentType;
+//   label: string;
+// }
 
 const Navigation = () => {
   const navigate = useNavigate();
@@ -11,14 +17,15 @@ const Navigation = () => {
     { path: '/campaigns', icon: PlaySquare, label: 'Campaigns' },
     { path: '/token', icon: Coins, label: 'Token' },
     { path: '/rewards', icon: Gift, label: 'Rewards' },
-    { path: '/migration', icon: Gift, label: 'migration' }
+    { path: '/migration', icon: Database, label: 'migration' }
   ];
 
   return (
     <nav className="bg-white border-t border-gray-200">
       <div className="flex justify-around items-center h-16">
         {navItems.map(({ path, icon: Icon, label }) => {
-          const isActive = location.pathname === path;
+        const isActive = location.pathname === path || 
+        (path !== '/' && location.pathname.startsWith(path));
           return (
             <button
               key={path}
