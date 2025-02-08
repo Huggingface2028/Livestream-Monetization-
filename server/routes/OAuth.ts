@@ -1,5 +1,5 @@
 import { authRequired } from '../middleware/auth';
-import  revocationManager  from '../services/revocationService';
+import revocationManager from '../services/revocationService';
 
 const express = require('express');
 const axios = require('axios');
@@ -10,8 +10,12 @@ const dotenv = require('dotenv');
 dotenv.config();
 const app = express();
 const router = express.router();
+const YouTubeConfig = require('../config/youtube');
+const Token = require('./models/Token');
 
-const redirectUri = process.env.TIKTOK_REDIRECT_URI;
+
+const redirect_uri_tiktok = process.env.TIKTOK_REDIRECT_URI;
+const redirect_uri_youtube = process.env.YOUTUBE_REDIRECT_URI
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -20,7 +24,7 @@ app.use((err, req, res, next) => {
 
 // Step 1: Redirect to TikTok Authorization
 app.get('/auth/tiktok', (req, res) => {
-  const authUrl = `https://www.tiktok.com/auth/authorize/?client_key=${process.env.TIKTOK_CLIENT_ID}&response_type=code&scope=user.info.basic,video.list&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  const authUrl = `https://www.tiktok.com/auth/authorize/?client_key=${process.env.YOUTUBE_CLIENT_ID}&response_type=code&scope=user.info.basic,video.list&redirect_uri=${encodeURIComponent(redirectUri)}`;
   res.redirect(authUrl);
 });
 
@@ -36,7 +40,7 @@ app.get('/auth/tiktok/callback', async (req, res) => {
         client_secret: process.env.TIKTOK_CLIENT_SECRET,
         code,
         grant_type: 'authorization_code',
-        redirect_uri: redirectUri,
+        redirect_uri: redirect_uri_tiktok,
       }),
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
@@ -52,6 +56,43 @@ app.get('/auth/tiktok/callback', async (req, res) => {
   } catch (error) {
     console.error(error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to authenticate with TikTok' });
+  }
+});
+
+// Step 1: Redirect to Youtube Authorization
+app.get('/auth/youtube', (req, res) => {
+  const authUrl = `{YouTubeConfig.authURL}/?client_key=${process.env.TIKTOK_CLIENT_ID}&response_type=code&scope=user.info.basic,video.list&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  res.redirect(authUrl);
+});
+
+// Step 2: Handle Youtube Callback and Exchange Code for Token
+app.get('/auth/youtube/callback', async (req, res) => {
+  const { code } = req.query;
+
+  try {
+    const tokenResponse = await axios.post(
+      '{YouTubeConfig.authURL}',
+      qs.stringify({
+        client_key: process.env.YOUTUBE_CLIENT_ID,
+        client_secret: process.env.YOUTUBE_CLIENT_SECRET,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: redirect_uri_youtube,
+      }),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+
+    const { access_token, refresh_token, open_id } = tokenResponse.data.data;
+
+    // Generate a JWT for secure session management
+    const token = jwt.sign({ open_id, access_token }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    // Store tokens securely (e.g., in a database)
+    res.cookie('auth_token', token, { httpOnly: true });
+    res.json({ message: 'Successfully authenticated with Youtube!' });
+  } catch (error) {
+    console.error(error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to authenticate with Youtube' });
   }
 });
 
@@ -73,7 +114,7 @@ const verifyPKCE = async (req, res, next) => {
   try {
     const { code_verifier: codeVerifier } = req.body;
     const storedVerifier = req.session.pkceVerifier;
-    
+
     if (!codeVerifier || !storedVerifier) {
       return res.status(400).json({ error: 'Invalid PKCE parameters' });
     }
@@ -82,7 +123,7 @@ const verifyPKCE = async (req, res, next) => {
     if (!valid) {
       return res.status(403).json({ error: 'PKCE verification failed' });
     }
-    
+
     delete req.session.pkceVerifier;
     next();
   } catch (error) {
@@ -91,24 +132,22 @@ const verifyPKCE = async (req, res, next) => {
 };
 
 // Modified Token Endpoint
-router.post('/token', 
+router.post('/token',
   verifyPKCE, // Add PKCE verification
   async (req, res) => {
     // to be added
   }
 );
 
-const Token = require('./models/Token');
-
 app.get('/tiktok/videos', async (req, res) => {
   const { userId } = req.query;
 
   try {
     /* const tokenData = await Token.findOne({ userId }); */
-    
-        const token = req.cookies.auth_token;
+
+    const token = req.cookies.auth_token;
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const tokenData = await Token.findOne({ userId: decoded.open_id });
 
@@ -135,10 +174,10 @@ app.get('/tiktok/videos', async (req, res) => {
           },
           { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
         );
-        
-       if (error instanceof jwt.JsonWebTokenError) {
-		return res.status(401).json({ error: 'Invalid token' });
-		}
+
+        if (error instanceof jwt.JsonWebTokenError) {
+          return res.status(401).json({ error: 'Invalid token' });
+        }
 
         const { access_token, refresh_token } = refreshResponse.data.data;
         await saveTokens(userId, access_token, refresh_token);
@@ -161,7 +200,7 @@ app.get('/tiktok/videos', async (req, res) => {
   }
 });
 
-router.post('/auth/revoke', 
+router.post('/auth/revoke',
   authRequired,
   async (req, res) => {
     await revocationManager.revokeToken(req.cookies.access_token, 3600);

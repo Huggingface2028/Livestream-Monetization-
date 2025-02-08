@@ -10,7 +10,7 @@ const axios = require('axios');
 const YouTubeConfig = require('../config/youtube');
 
 // Initiate YouTube OAuth flow
-router.get('/youtube', (req, res) => {
+router.get('/auth/youtube', (req, res) => {
   const authURL = new URL(YouTubeConfig.authURL);
   authURL.searchParams.set('client_id', YouTubeConfig.clientID);
   authURL.searchParams.set('redirect_uri', YouTubeConfig.redirectURI);
@@ -22,7 +22,7 @@ router.get('/youtube', (req, res) => {
 });
 
 // Handle YouTube callback
-router.get('/youtube/callback', async (req, res) => {
+router.get('/auth/youtube/callback', async (req, res) => {
   try {
     const { code } = req.query;
     
