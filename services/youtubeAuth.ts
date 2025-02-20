@@ -6,16 +6,16 @@ const REDIRECT_URI = import.meta.env.VITE_YOUTUBE_REDIRECT_URI;
 
 export const initiateAuth = () => {
   const state = Math.random().toString(36).substring(7);
-  localStorage.setItem('tiktok_auth_state', state);
-  
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth/authorize/?client_key=${CLIENT_KEY}&response_type=code&redirect_uri=${REDIRECT_URI}&scope=user.info.basic,user.info.profile&state=${state}`;
+  localStorage.setItem('youtube_auth_state', state);
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth/authorize?client_id=${CLIENT_KEY}&response_type=code&redirect_uri=${REDIRECT_URI}&scope=https://www.googleapis.com/auth/youtube.readonly&state=${state}`;
   window.location.href = authUrl;
 };
 
 export const getAccessToken = async (code: string) => {
   try {
-    const response = await axios.post('{', {
-      client_key: CLIENT_KEY,
+    const response = await axios.post('https://oauth2.googleapis.com/token', {
+      client_id: CLIENT_KEY,
       client_secret: CLIENT_SECRET,
       code,
       grant_type: 'authorization_code',
@@ -30,14 +30,14 @@ export const getAccessToken = async (code: string) => {
 
 export const getProfile = async (accessToken: string) => {
   try {
-    const response = await axios.get('https://www.googleapis.com/auth/youtube.readonly', {
+    const response = await axios.get('https://www.googleapis.com/youtube/v3/channels?part=statistics&mine=true', {
       headers: {
         Authorization: `Bearer ${accessToken}`
       }
     });
-    return response.data.followers;
+    return response.data.items[0].statistics.subscriberCount;
   } catch (error) {
-    console.error('Error retrieving followers:', error);
+    console.error('Error retrieving subscriber count:', error);
     throw error;
   }
 };

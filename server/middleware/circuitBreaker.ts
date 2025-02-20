@@ -1,77 +1,26 @@
-import { redisClient } from '../database/redis';
+import { RequestHandler } from 'express';
+import { CircuitBreaker } from 'opossum';
+import { logger } from '../logger';
 
-const CIRCUIT_BREAKER_KEY = `${process.env.REDIS_KEY_PREFIX}:circuit-breaker`;
+const circuitBreakerOptions = {
+  timeout: 3000, // If our function takes longer than 3 seconds, trigger a failure
+  errorThresholdPercentage: 50, // When 50% of requests fail, trip the circuit
+  resetTimeout: 10000 // After 10 seconds, try again.
+};
 
-interface CircuitBreakerState {
-  state: 'OPEN' | 'CLOSED' | 'HALF_OPEN';
-  failureCount: number;
-  lastFailure: number;
-}
+const circuitBreaker = new CircuitBreaker((req, res) => {
+  return Promise.resolve();
+}, circuitBreakerOptions);
 
-export class CircuitBreaker {
-  private static readonly threshold = 5;
-  private static readonly resetTimeout = 30000;
+circuitBreaker.on('open', () => logger.warn('CIRCUIT BREAKER OPEN'));
+circuitBreaker.on('halfOpen', () => logger.info('CIRCUIT BREAKER HALF_OPEN'));
+circuitBreaker.on('close', () => logger.info('CIRCUIT BREAKER CLOSED'));
 
-  static async getState(): Promise<CircuitBreakerState> {
-    const state = await redisClient.get(CIRCUIT_BREAKER_KEY);
-    return state ? JSON.parse(state) : {
-      state: 'CLOSED',
-      failureCount: 0,
-      lastFailure: 0
-    };
-  }
-
-  public static getResetTimeout(): number {
-    return this.resetTimeout;
-  }
-
-  static async trackFailure() {
-    const multi = redisClient.multi();
-    multi.incrby(`${CIRCUIT_BREAKER_KEY}:failureCount`, 1);
-    multi.set(`${CIRCUIT_BREAKER_KEY}:lastFailure`, Date.now());
-    
-    const [count] = await multi.exec();
-    
-    if (count >= this.threshold) {
-      await redisClient.setex(CIRCUIT_BREAKER_KEY, 
-        this.resetTimeout / 1000, 
-        JSON.stringify({
-          state: 'OPEN',
-          failureCount: count,
-          lastFailure: Date.now()
-        })
-      );
-      
-      setTimeout(() => {
-        redisClient.set(CIRCUIT_BREAKER_KEY, JSON.stringify({
-          state: 'HALF_OPEN',
-          failureCount: 0,
-          lastFailure: 0
-        }));
-      }, this.resetTimeout);
-    }
-  }
-
-  static async reset() {
-    await redisClient.del(CIRCUIT_BREAKER_KEY);
-  }
-}
-
-redisClient.on('error', async (err) => {
-  if (err.message.includes('ECONNREFUSED')) {
-    await CircuitBreaker.trackFailure();
-  }
-});
-
-export const redisCircuitBreaker = async (req, res, next) => {
-  const state = await CircuitBreaker.getState();
-  
-  if (state.state === 'OPEN') {
-    return res.status(503).json({ 
-      error: 'Service unavailable',
-      retryAfter: CircuitBreaker.getResetTimeout() / 1000 
+export const circuitBreakerMiddleware: RequestHandler = (req, res, next) => {
+  circuitBreaker.fire(req, res)
+    .then(() => next())
+    .catch(err => {
+      logger.error('Circuit breaker error:', err);
+      res.status(503).send('Service Unavailable');
     });
-  }
-  
-  next();
 };

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { logger } from '../logger';
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -8,17 +9,17 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-export const sendEmail = async (to: string, subject: string, text: string) => {
+export async function sendEmail(to: string, subject: string, text: string) {
   try {
     const info = await transporter.sendMail({
-      from: `"Stream Platform" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      text
+      from: process.env.EMAIL_USER,
+      to: to,
+      subject: subject,
+      text: text
     });
-    return info;
+    logger.info('Message sent: %s', info.messageId);
   } catch (error) {
-    console.error('Email send failed:', { to, subject, error });
+    logger.error('Error sending email:', error);
     throw error;
   }
-};
+}

@@ -1,60 +1,58 @@
 import session from 'express-session';
-import MemoryStore from 'memorystore'; // Ensure proper import
+import { RedisStore } from 'connect-redis';
 import { redisClient } from '../database/redis';
 import { encryptSession, decryptSession } from '../security/sessionCrypto';
-import { RedisStore } from 'connect-redis';
-import { Response as ExpressResponse } from 'express';
-import sessionConfig from '../config/session';
+import { sessionReviver } from './sessionSecurity';
+import { logger } from '../logger';
 
+const sessionStore = new RedisStore({
+  client: redisClient,
+  prefix: 'sess:',
+  ttl: 86400,
+  disableTouch: false,
+  enableAutoPipelining: true, // Enable Redis pipelining
+  serializer: {
+    parse: async (data) => {
+      try {
+        return JSON.parse(
+          await decryptSession(data.toString()), 
+          sessionReviver
+        );
+      } catch (error) {
+        logger.error('Error parsing session data:', error);
+        throw error;
+      }
+    },
+    stringify: async (sess) => {
+      try {
+        return await encryptSession(JSON.stringify(sess, sessionReplacer)).then(result => result);
+      } catch (error) {
+        logger.error('Error stringifying session data:', error);
+        throw error;
+      }
+    }
+  }
+});
 
-// Updated session store configuration
-const sessionStore = process.env.NODE_ENV === 'production' 
-  ? new RedisStore({
-      client: redisClient,
-      prefix: 'sess:',
-      ttl: 86400
-    })
-  : MemoryStore({
-      checkPeriod: 86400000, // Development only
-    /* // @ts-expect-error MemoryStore type compatibility issues */
-      dispose: (key, value) => encryptSession(value)
-    });
-
-// Update sessionReplacer/Reviver for encryption
-function sessionReplacer(key: string, value: any) {
-  if (key === 'codeVerifier') return undefined;
-  if (value instanceof Buffer) return value.toString('base64');
-  return value;
-}
-
-export function sessionReviver(key: string, value: any) {
-  if (key === 'timestamp') return new Date(value);
-  return value;
-}
-
-const fallbackStore = process.env.NODE_ENV === 'production' 
-  ? sessionStore 
-  : MemoryStore({
-      checkPeriod: 86400000 // Prune expired entries daily
-    });
-
-    export const setAuthCookies = (res: ExpressResponse, tokens: { accessToken: string, refreshToken: string }) => {
-      res.cookie('access_token', tokens.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 900000, // 15 minutes
-        path: '/'
-      });
-    
-      res.cookie('refresh_token', tokens.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 604800000, // 7 days
-        path: '/auth/refresh'
-      });
-    };
-
+const sessionConfig = {
+  store: sessionStore,
+  secret: process.env.SESSION_SECRET!,
+  name: '__Host-session',
+  resave: false,
+  saveUninitialized: false,
+  rolling: true, // Enable session prolongation on activity
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+} as session.SessionOptions;
 
 export const sessionMiddleware = session(sessionConfig);
+
+function sessionReplacer(key, value) {
+  // Add custom session replacer logic here
+  return value;
+}

@@ -1,21 +1,12 @@
-import { AuditLog } from '../models/AuditLog';
+import { RequestHandler } from 'express';
+import { logger } from '../logger';
 
-export const authLogger = (req, res, next) => {
+export const auditLogger: RequestHandler = (req, res, next) => {
   const start = Date.now();
-  
-  res.on('finish', async () => {
-    const auditEntry = {
-      timestamp: new Date(),
-      userId: req.user?.id,
-      eventType: req.authEventType,
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent'],
-      success: res.statusCode < 400,
-      metadata: req.authMetadata,
-      duration: Date.now() - start
-    };
 
-    await AuditLog.create(auditEntry);
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`);
   });
 
   next();

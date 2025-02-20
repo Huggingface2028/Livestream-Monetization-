@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Download, Users, Video, Heart, Bookmark, CheckCircle, AlertCircle } from 'lucide-react';
-import { initiateAuth, getAccessToken, getUserInfo } from '../services/auth';
+import { initiateAuth as initiateTikTokAuth, getAccessToken as getTikTokAccessToken, getFollowers as getTikTokFollowers } from '../../services/tiktokAuth';
+// import { initiateAuth as initiateYoutubeAuth, getAccessToken as getYoutubeAccessToken, getProfile as getYoutubeProfile } from '../../services/youtubeAuth';
 import axios from 'axios';
 
 interface MigrationStatus {
@@ -32,8 +33,8 @@ const Migration = () => {
       
       if (code && state === localStorage.getItem('tiktok_auth_state')) {
         try {
-          const accessToken = await getAccessToken(code);
-          localStorage.setItem('tiktok_access_token', accessToken.access_token);
+          const accessToken = await getTikTokAccessToken(code);
+          localStorage.setItem('tiktok_access_token', accessToken);
           setIsConnected(true);
           setError('');
         } catch (err) {
@@ -48,7 +49,7 @@ const Migration = () => {
 
   const handleTikTokConnect = () => {
     try {
-      initiateAuth();
+      initiateTikTokAuth();
     } catch (err) {
       setError('Failed to connect to TikTok');
       console.error(err);
@@ -70,7 +71,7 @@ const Migration = () => {
         throw new Error('No access token found');
       }
 
-      const followers = await getUserInfo(accessToken);
+      const followers = await getTikTokFollowers(accessToken);
       
       // Send followers to backend
       await axios.post('/invite-followers', { accessToken });

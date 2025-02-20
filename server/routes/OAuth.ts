@@ -1,216 +1,126 @@
-import { authRequired } from '../middleware/auth';
-import revocationManager from '../services/revocationService';
+import express from 'express';
+import { Request, Response } from 'express';
+import { getAccessToken as getYoutubeAccessToken, getProfile as getYoutubeProfile } from '../../services/youtubeAuth';
+import { getAccessToken as getTikTokAccessToken, getFollowers as getTikTokFollowers } from '../../services/tiktokAuth';
+import { getAccessToken as getTwitchAccessToken, getProfile as getTwitchProfile } from '../../services/twitchAuth';
+import { getAccessToken as getSpotifyAccessToken, getProfile as getSpotifyProfile } from '../../services/spotifyAuth';
+import { loadProfile, saveProfile } from '../services/profileService';
+import { Profile } from '../models/Profile';
 
-const express = require('express');
-const axios = require('axios');
-const qs = require('qs');
-const jwt = require('jsonwebtoken');
-const dotenv = require('dotenv');
+export const OAuthRoutes = express.Router();
 
-dotenv.config();
-const app = express();
-const router = express.router();
-const YouTubeConfig = require('../config/youtube');
-const Token = require('./models/Token');
+OAuthRoutes.get('/youtube/callback', async (req: Request, res: Response) => {
+  const { code, state } = req.query;
 
-
-const redirect_uri_tiktok = process.env.TIKTOK_REDIRECT_URI;
-const redirect_uri_youtube = process.env.YOUTUBE_REDIRECT_URI
-
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal Server Error' });
-});
-
-// Step 1: Redirect to TikTok Authorization
-app.get('/auth/tiktok', (req, res) => {
-  const authUrl = `https://www.tiktok.com/auth/authorize/?client_key=${process.env.YOUTUBE_CLIENT_ID}&response_type=code&scope=user.info.basic,video.list&redirect_uri=${encodeURIComponent(redirectUri)}`;
-  res.redirect(authUrl);
-});
-
-// Step 2: Handle TikTok Callback and Exchange Code for Token
-app.get('/auth/tiktok/callback', async (req, res) => {
-  const { code } = req.query;
-
-  try {
-    const tokenResponse = await axios.post(
-      'https://open.tiktokapis.com/v2/oauth/token/',
-      qs.stringify({
-        client_key: process.env.TIKTOK_CLIENT_ID,
-        client_secret: process.env.TIKTOK_CLIENT_SECRET,
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: redirect_uri_tiktok,
-      }),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-
-    const { access_token, refresh_token, open_id } = tokenResponse.data.data;
-
-    // Generate a JWT for secure session management
-    const token = jwt.sign({ open_id, access_token }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-    // Store tokens securely (e.g., in a database)
-    res.cookie('auth_token', token, { httpOnly: true });
-    res.json({ message: 'Successfully authenticated with TikTok!' });
-  } catch (error) {
-    console.error(error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to authenticate with TikTok' });
-  }
-});
-
-// Step 1: Redirect to Youtube Authorization
-app.get('/auth/youtube', (req, res) => {
-  const authUrl = `{YouTubeConfig.authURL}/?client_key=${process.env.TIKTOK_CLIENT_ID}&response_type=code&scope=user.info.basic,video.list&redirect_uri=${encodeURIComponent(redirectUri)}`;
-  res.redirect(authUrl);
-});
-
-// Step 2: Handle Youtube Callback and Exchange Code for Token
-app.get('/auth/youtube/callback', async (req, res) => {
-  const { code } = req.query;
-
-  try {
-    const tokenResponse = await axios.post(
-      '{YouTubeConfig.authURL}',
-      qs.stringify({
-        client_key: process.env.YOUTUBE_CLIENT_ID,
-        client_secret: process.env.YOUTUBE_CLIENT_SECRET,
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: redirect_uri_youtube,
-      }),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-
-    const { access_token, refresh_token, open_id } = tokenResponse.data.data;
-
-    // Generate a JWT for secure session management
-    const token = jwt.sign({ open_id, access_token }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-    // Store tokens securely (e.g., in a database)
-    res.cookie('auth_token', token, { httpOnly: true });
-    res.json({ message: 'Successfully authenticated with Youtube!' });
-  } catch (error) {
-    console.error(error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to authenticate with Youtube' });
-  }
-});
-
-const saveTokens = async (userId, accessToken, refreshToken) => {
-  try {
-    await Token.findOneAndUpdate(
-      { userId },
-      { accessToken, refreshToken },
-      { upsert: true, new: true }
-    );
-  } catch (error) {
-    console.error('Error saving tokens:', error);
-    throw error;
-  }
-};
-
-// PKCE Verification Middleware
-const verifyPKCE = async (req, res, next) => {
-  try {
-    const { code_verifier: codeVerifier } = req.body;
-    const storedVerifier = req.session.pkceVerifier;
-
-    if (!codeVerifier || !storedVerifier) {
-      return res.status(400).json({ error: 'Invalid PKCE parameters' });
-    }
-
-    const valid = await verifyPKCECode(storedVerifier, codeVerifier);
-    if (!valid) {
-      return res.status(403).json({ error: 'PKCE verification failed' });
-    }
-
-    delete req.session.pkceVerifier;
-    next();
-  } catch (error) {
-    next(new AuthenticationError('PKCE verification failed'));
-  }
-};
-
-// Modified Token Endpoint
-router.post('/token',
-  verifyPKCE, // Add PKCE verification
-  async (req, res) => {
-    // to be added
-  }
-);
-
-app.get('/tiktok/videos', async (req, res) => {
-  const { userId } = req.query;
-
-  try {
-    /* const tokenData = await Token.findOne({ userId }); */
-
-    const token = req.cookies.auth_token;
-    if (!token) return res.status(401).json({ error: 'Unauthorized' });
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const tokenData = await Token.findOne({ userId: decoded.open_id });
-
-    if (!tokenData) return res.status(404).json({ error: 'User tokens not found' });
-
+  if (typeof code === 'string') {
     try {
-      const videoResponse = await axios.get('https://open.tiktokapis.com/v2/video/list/', {
-        headers: {
-          Authorization: `Bearer ${tokenData.accessToken}`,
-        },
-      });
+      const accessToken = await getYoutubeAccessToken(code);
+      const subscriberCount = await getYoutubeProfile(accessToken);
 
-      res.json(videoResponse.data.data.videos);
+      // Load existing profile or create a new one
+      let profile: Profile | null = await loadProfile(req.session.userId);
+      if (!profile) {
+        profile = { userId: req.session.userId };
+      }
+
+      // Update YouTube data
+      profile.youtube = { subscriberCount: subscriberCount };
+      await saveProfile(profile);
+
+      console.log('YouTube Subscriber Count:', subscriberCount);
+      res.redirect(`${process.env.VITE_CLIENT_URL}/rewards`);
     } catch (error) {
-      if (error.response?.status === 401) {
-        // Token expired, refresh it
-        const refreshResponse = await axios.post(
-          'https://open.tiktokapis.com/v2/oauth/token/',
-          {
-            client_key: process.env.TIKTOK_CLIENT_KEY,
-            client_secret: process.env.TIKTOK_CLIENT_SECRET,
-            refresh_token: tokenData.refreshToken,
-            grant_type: 'refresh_token',
-          },
-          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-        );
+      console.error('Error during YouTube OAuth callback:', error);
+      res.status(500).send('YouTube OAuth failed');
+    }
+  } else {
+    res.status(400).send('Invalid code');
+  }
+});
 
-        if (error instanceof jwt.JsonWebTokenError) {
-          return res.status(401).json({ error: 'Invalid token' });
+OAuthRoutes.get('/tiktok/callback', async (req: Request, res: Response) => {
+  const { code, state } = req.query;
+
+  if (typeof code === 'string') {
+    try {
+      const accessToken = await getTikTokAccessToken(code);
+      const followers = await getTikTokFollowers(accessToken);
+
+      // Load existing profile or create a new one
+      let profile: Profile | null = await loadProfile(req.session.userId);
+      if (!profile) {
+        profile = { userId: req.session.userId };
+      }
+
+      // Update TikTok data
+      profile.tiktok = { followers: followers };
+      await saveProfile(profile);
+
+      console.log('TikTok Followers:', followers);
+      res.redirect(`${process.env.VITE_CLIENT_URL}/rewards`);
+    } catch (error) {
+      console.error('Error during TikTok OAuth callback:', error);
+      res.status(500).send('TikTok OAuth failed');
+    }
+  } else {
+    res.status(400).send('Invalid code');
+  }
+});
+
+OAuthRoutes.get('/twitch/callback', async (req: Request, res: Response) => {
+    const { code, state } = req.query;
+
+    if (typeof code === 'string') {
+      try {
+        const accessToken = await getTwitchAccessToken(code);
+        const email = await getTwitchProfile(accessToken);
+
+        // Load existing profile or create a new one
+        let profile: Profile | null = await loadProfile(req.session.userId);
+        if (!profile) {
+          profile = { userId: req.session.userId };
         }
 
-        const { access_token, refresh_token } = refreshResponse.data.data;
-        await saveTokens(userId, access_token, refresh_token);
+        // Update Twitch data
+        profile.twitch = { email: email };
+        await saveProfile(profile);
 
-        // Retry video fetch with new token
-        const retryResponse = await axios.get('https://open.tiktokapis.com/v2/video/list/', {
-          headers: {
-            Authorization: `Bearer ${access_token}`,
-          },
-        });
-
-        res.json(retryResponse.data.data.videos);
-      } else {
-        throw error;
+        console.log('Twitch Email:', email);
+        res.redirect(`${process.env.VITE_CLIENT_URL}/rewards`);
+      } catch (error) {
+        console.error('Error during Twitch OAuth callback:', error);
+        res.status(500).send('Twitch OAuth failed');
       }
+    } else {
+      res.status(400).send('Invalid code');
     }
-  } catch (error) {
-    console.error('Error fetching TikTok videos:', error);
-    res.status(500).json({ error: 'Failed to fetch videos' });
-  }
-});
+  });
 
-router.post('/auth/revoke',
-  authRequired,
-  async (req, res) => {
-    await revocationManager.revokeToken(req.cookies.access_token, 3600);
-    res.clearCookie('access_token');
-    res.clearCookie('refresh_token');
-    res.sendStatus(204);
-  }
-);
+  OAuthRoutes.get('/spotify/callback', async (req: Request, res: Response) => {
+    const { code, state } = req.query;
 
+    if (typeof code === 'string') {
+      try {
+        const accessToken = await getSpotifyAccessToken(code);
+        const email = await getSpotifyProfile(accessToken);
 
+        // Load existing profile or create a new one
+        let profile: Profile | null = await loadProfile(req.session.userId);
+        if (!profile) {
+          profile = { userId: req.session.userId };
+        }
 
+        // Update Spotify data
+        profile.spotify = { email: email };
+        await saveProfile(profile);
 
-app.listen(4000, () => console.log('Server running on http://localhost:4000'));
+        console.log('Spotify Email:', email);
+        res.redirect(`${process.env.VITE_CLIENT_URL}/rewards`);
+      } catch (error) {
+        console.error('Error during Spotify OAuth callback:', error);
+        res.status(500).send('Spotify OAuth failed');
+      }
+    } else {
+      res.status(400).send('Invalid code');
+    }
+  });

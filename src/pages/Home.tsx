@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Twitch, Youtube, AudioLines } from 'lucide-react';
 import { FaTiktok } from 'react-icons/fa';
-import { initiateAuth } from '../services/auth';
+import { initiateAuth as initiateTikTokAuth } from '../../services/tiktokAuth';
+import { initiateAuth as initiateYoutubeAuth } from '../../services/youtubeAuth';
+import { initiateAuth as initiateTwitchAuth } from '../../services/twitchAuth';
+import { initiateAuth as initiateSpotifyAuth } from '../../services/spotifyAuth';
 
 const Home = () => {
   const [creators, setCreators] = useState([]);
@@ -13,12 +16,48 @@ const Home = () => {
     console.log('Initiating TikTok login...');
     setIsLoading(true);
     try {
-      initiateAuth();
+      initiateTikTokAuth();
     } catch (error) {
       setError('Failed to initiate TikTok login.');
       setIsLoading(false);
     }
   };
+
+    // Initiates YouTube login
+    const handleConnectYouTube = () => {
+      console.log('Initiating YouTube login...');
+      setIsLoading(true);
+      try {
+        initiateYoutubeAuth();
+      } catch (error) {
+        setError('Failed to initiate YouTube login.');
+        setIsLoading(false);
+      }
+    };
+
+    // Initiates Twitch login
+    const handleConnectTwitch = () => {
+      console.log('Initiating Twitch login...');
+      setIsLoading(true);
+      try {
+        initiateTwitchAuth();
+      } catch (error) {
+        setError('Failed to initiate Twitch login.');
+        setIsLoading(false);
+      }
+    };
+
+      // Initiates Spotify login
+    const handleConnectSpotify = () => {
+      console.log('Initiating Spotify login...');
+      setIsLoading(true);
+      try {
+        initiateSpotifyAuth();
+      } catch (error) {
+        setError('Failed to initiate Spotify login.');
+        setIsLoading(false);
+      }
+    };
 
   // Fetch trending creators
   const fetchCreators = async () => {
@@ -37,9 +76,9 @@ const Home = () => {
   }, []);
 
   const platforms = [
-    { name: 'Twitch', icon: Twitch, color: 'purple' },
-    { name: 'Spotify', icon: AudioLines, color: 'pink' },
-    { name: 'Youtube', icon: Youtube, color: 'blue' },
+    { name: 'Twitch', icon: Twitch, color: 'purple', action: handleConnectTwitch },
+    { name: 'Spotify', icon: AudioLines, color: 'green', action: handleConnectSpotify },
+    { name: 'Youtube', icon: Youtube, color: 'blue', action: handleConnectYouTube },
     { 
       name: 'TikTok',
       icon: FaTiktok,
@@ -65,7 +104,7 @@ const Home = () => {
         ))}
       </div>
 
-      {isLoading && <p className="text-blue-500">Redirecting to TikTok...</p>}
+      {isLoading && <p className="text-blue-500">Redirecting...</p>}
       {error && <p className="text-red-500">{error}</p>}
 
       <h2 className="text-xl font-semibold mb-4">Trending Creators</h2>

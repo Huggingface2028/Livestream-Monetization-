@@ -1,13 +1,13 @@
-export const rotateSession = (req, res, next) => {
-  const temp = req.session;
-  
-  req.session.regenerate((err) => {
-    if (err) return next(err);
-    
-    // Preserve only necessary session data
-    req.session.userId = temp.userId;
-    req.session.token_hash = temp.token_hash;
-    
-    next();
-  });
+import { RequestHandler } from 'express';
+import { logger } from '../logger';
+
+export const sessionSecurityMiddleware: RequestHandler = (req, res, next) => {
+  // Implement session security measures here
+  logger.info('Session security middleware');
+  next();
 };
+
+export function sessionReviver(key, value) {
+  // Add custom session reviver logic here
+  return value;
+}

@@ -1,21 +1,14 @@
-import * as crypto from 'crypto';
+import { RequestHandler } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import { logger } from '../logger';
 
-export const verifyTokenBinding = (req, res, next) => {
-  const presentedToken = req.cookies.access_token;
-  const storedTokenHash = req.session.token_hash;
-  
-  if (!presentedToken || !storedTokenHash) {
-    return res.status(401).json({ error: 'Missing token binding' });
-  }
+export const tokenBindingMiddleware: RequestHandler = (req, res, next) => {
+  const tokenId = uuidv4();
+  req.tokenId = tokenId;
 
-  const currentHash = crypto
-    .createHash('sha256')
-    .update(presentedToken)
-    .digest('hex');
+  res.setHeader('Token-Id', tokenId);
 
-  if (currentHash !== storedTokenHash) {
-    return res.status(403).json({ error: 'Token binding mismatch' });
-  }
-  
+  logger.info(`Token ID ${tokenId} generated for request ${req.method} ${req.originalUrl}`);
+
   next();
 };
